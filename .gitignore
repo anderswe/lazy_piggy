@@ -1,1 +1,20 @@
+# files
+.gitignore
+src/scripts/configs.R
+lazy_piggy.Rproj
+.Rproj.user
+
+# directories
+src/metadata/
+src/clones/
+src/scripts/old/
+src/objs/
 outs/
+
+
+# patterns
+**/.DS_Store
+
+
+
+

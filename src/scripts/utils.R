@@ -2,7 +2,7 @@
 #
 # gCIS pipeline utils
 # Dec 3, 2022
-# Anders E.
+# Anders E. & Patryk S.
 # Taylor lab
 # 
 ##########################################################################################
@@ -14,6 +14,12 @@
 # which are in some cases entirely intact here, e.g.
 # cluster_insertions(), most of neg_binom_thresh(), etc etc.
 
+# Palette -----------------------------------------------------------------
+pal <- c(blue = "#345b94", purple = "#902A7A", red = "#d2403b",
+         yellow = "#F1E902", green = "#1D9849", orange = "#F68B1F", grey = "#ADAFB2")
+
+# Misc functions -----------------------------------------------------------------
+`%notin%` <- Negate(`%in%`)
 
 #-------------------------------------------
 ##    CLUSTER INSERTIONS 
@@ -109,7 +115,7 @@ merged_counts <- function(tbl, type="shear"){
     
   } else if (type == "restriction"){
     
-    out = tbl %>% arrange(desc(count)) %>% head(. , n=1) %>% select(-orientation, -Sample_key, -cluster) #can this not just be written as tbl %>% group_by(x,y,z) %>% slice_max(count, n = 1) %>% select(a,b,c)?
+    out = tbl %>% arrange(desc(count)) %>% head(. , n=1) %>% select(-orientation, -Sample_key, -cluster)
     
   }
   
@@ -143,7 +149,6 @@ sum_reads_0.1_per = function(tbl){
 #-------------------------------------------
 ##    95% percentile of negative binomial
 #-------------------------------------------
-#Function input section modified to match what was expected of the >10yr code. I am modifying it minimally even though I don't think it probably converging on the opimal solution with the simple parameter sweep
 neg_binom_thresh <-function(tbl){
   
   #print(paste(tbl$patient, tbl$sample, sep="_"))
@@ -248,4 +253,30 @@ sumsquared <- function(real, test){
     sum=sum+ (real[i]-test[i])*(real[i]-test[i])
   }
   return(sum)
+}
+
+
+#-------------------------------------------
+##    Jaccard matrix
+#-------------------------------------------
+
+jaccard_matrix <- function(in_dt, ref_dt, mice){
+  require(foreach)
+  
+  # initialize matrix
+  mtx <- as.data.frame(matrix(NA,length(mice),length(mice)))
+  rownames(mtx) <- mice
+  colnames(mtx) <- mice
+  
+  # nested loop
+  foreach(i = mice) %do% {
+    foreach(j = mice) %do% {
+      mtx[i,j] <- length(intersect((in_dt %>% filter.(patient == i) %>% pull.(insertion_map)), 
+                                   (ref_dt %>% filter.(patient == j) %>% pull.(insertion_map)))) / 
+        length(unique(c((in_dt %>% filter.(patient == i) %>% pull.(insertion_map)), 
+                        (ref_dt %>% filter.(patient == j) %>% pull.(insertion_map)))))
+    }
+  }
+  
+  return(mtx)
 }
