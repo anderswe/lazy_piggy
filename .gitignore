@@ -1,7 +1,9 @@
 # files
-.gitignore
 src/scripts/configs.R
 lazy_piggy.Rproj
+.lintr
+.gitignore
+config.yaml
 .Rproj.user
 
 # directories
@@ -10,11 +12,14 @@ src/clones/
 src/scripts/old/
 src/objs/
 outs/
-
+indd/
+manuscript/
+geo_submission/
+cover_letter/
 
 # patterns
-**/.DS_Store
-
+.*
+*.DS_store
 
 
 

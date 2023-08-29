@@ -26,7 +26,7 @@ source("src/scripts/configs.R")
 
 
 # Inputs -------------------------------------------------------------------
-input_file <- glue("{awe_local_dir}20211201/all_annotations_20211201.annot.gz")
+input_file <- glue("{awe_local_dir}20211201/all_annotations_20211201.annot.gz") # for reviewers: this is the same as for_reviewers/processed_data/wgs_lp_tumours/all_annotations_20211201.csv.gz
 output_dir <- glue("{repo_dir}outs") 
 metadata_file <- glue("{awe_local_dir}20220524/metadata_20220524.csv")
 gene_annot_input <- glue("{awe_local_dir}20211104/gene_annot_gCIS_15000.txt")
