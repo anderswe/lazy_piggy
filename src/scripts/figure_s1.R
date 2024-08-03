@@ -123,3 +123,183 @@ print(gg, newpage = FALSE)
 dev.off()
 
 
+# Survival by tam status, subgrouped by donor chromosome
+for(i in unique(df$donor)){
+
+  df_chr <- df %>% dplyr::filter(donor == i)
+  surv <- Surv(time = df_chr$total_surival, event = rep(1, length(df_chr$total_surival)))
+  fit <- survfit(surv ~ experiment_group, data = df_chr)
+  copies <- ifelse(i == "7", "1000", "600")
+  caption <- glue::glue("Donor chromosome {i}\n({copies}+ LP copies)\np = {surv_pvalue(fit, df_chr)$pval %>% signif(3)}")
+  
+  gg <- ggsurvplot(fit, data = df_chr, conf.int = F, xlab = "Time (Days)", pval = FALSE,
+                   xlim=c(0,200), risk.table = T, #max(df$total_surival)+5
+                   legend.title = " ", 
+                   # legend = "right",
+                   tables.theme = theme_cleantable(), # I really liked the look of the clean table theme, but it was unclear which timepoints the at-risk table values were associated with.
+                   break.time.by = 50,
+                   risk.table.fontsize = 4,
+                   risk.table.height = 0.20, 
+                   # risk.table.title = "test",
+                   # tables.col = "strata",
+                   # risk.table.y.text = TRUE,
+                   # risk.table.y.text.col = FALSE,
+                   # risk.table.pos = "in",
+                   surv.median.line = c("h"),
+                   legend.labs = c("Tamoxifen +", "Tamoxifen -"),
+                   censor.shape = c("|"), censor.size = 6, 
+                   axes.offset = T, tables.y.text = FALSE,
+                   palette = mypal)+
+    guides(colour = guide_legend(nrow = 2))
+  gg$plot <- gg$plot+
+    annotate(geom = "text", x = 0, y = 0, label = caption, hjust = 0, vjust = 0, size = 4)+
+    theme(legend.justification=c(0.4, 0.1), legend.position = c(0.75,0.75)) 
+  gg$table <- gg$table + 
+    theme(plot.title = element_text(hjust = 0, size = 12))
+  gg
+  
+  pdf(glue::glue("{outdir}/survival_lp_by_tam_status_donor_chr{i}.pdf"),height = 4, width = 4.5)
+  print(gg, newpage = FALSE)
+  dev.off()
+  
+  
+}
+
+
+
+# survival by donor chromosome
+# Survival object
+surv <- Surv(time = df$total_surival, event = rep(1, length(df$total_surival)))
+fit <- survfit(surv ~ donor, data = df)
+
+# Prepare KM plot
+caption <- glue("Log-rank\np = {surv_pvalue(fit, df)$pval %>% signif(3)}")
+gg <- ggsurvplot(fit, data = df, conf.int = F, xlab = "Time (Days)", pval = FALSE,
+                 xlim=c(0,200), risk.table = T, #max(df$total_surival)+5
+                 legend.title = " ", 
+                 # legend = "right",
+                 tables.theme = theme_cleantable(), # I really liked the look of the clean table theme, but it was unclear which timepoints the at-risk table values were associated with.
+                 break.time.by = 50,
+                 risk.table.fontsize = 4,
+                 risk.table.height = 0.20, 
+                 # risk.table.title = "test",
+                 # tables.col = "strata",
+                 # risk.table.y.text = TRUE,
+                 # risk.table.y.text.col = FALSE,
+                 # risk.table.pos = "in",
+                 surv.median.line = c("h"),
+                 legend.labs = c("Chr10 Donor", "Chr7 Donor"),
+                 censor.shape = c("|"), censor.size = 6, 
+                 axes.offset = T, tables.y.text = FALSE,
+                 palette = mypal)+
+  guides(colour = guide_legend(nrow = 2))
+gg$plot <- gg$plot+
+  annotate(geom = "text", x = 0, y = 0, label = caption, hjust = 0, vjust = 0, size = 4)+
+  theme(legend.justification=c(0.4, 0.1), legend.position = c(0.75,0.75)) 
+gg$table <- gg$table + 
+  theme(plot.title = element_text(hjust = 0, size = 12))
+gg
+
+# Export plot
+pdf(glue::glue("{outdir}/survival_lp_by_donor.pdf"),height = 4, width = 4)
+print(gg, newpage = FALSE)
+dev.off()
+
+# survival by donor, subgrouped by tam status
+for(i in unique(df$experiment_group)){
+  
+  df_chr <- df %>% dplyr::filter(experiment_group == i) %>% dplyr::mutate(donor = ifelse(donor == "7", "chr7 (1000+)",  "chr10 (600+)"))
+  surv <- Surv(time = df_chr$total_surival, event = rep(1, length(df_chr$total_surival)))
+  fit <- survfit(surv ~ donor, data = df_chr)
+  caption <- glue::glue("p = {surv_pvalue(fit, df_chr)$pval %>% signif(3)}")
+  
+  gg <- ggsurvplot(fit, data = df_chr, conf.int = F, xlab = "Time (Days)", pval = FALSE,
+                   xlim=c(0,200), risk.table = T, #max(df$total_surival)+5
+                   legend.title = " ", 
+                   # legend = "right",
+                   tables.theme = theme_cleantable(), 
+                   break.time.by = 50,
+                   risk.table.fontsize = 4,
+                   risk.table.height = 0.20, 
+                   # risk.table.title = "test",
+                   # tables.col = "strata",
+                   # risk.table.y.text = TRUE,
+                   # risk.table.y.text.col = FALSE,
+                   # risk.table.pos = "in",
+                   surv.median.line = c("h"),
+                   # legend.labs = c("Tamoxifen +", "Tamoxifen -"),
+                   censor.shape = c("|"), censor.size = 6, 
+                   axes.offset = T, tables.y.text = FALSE,
+                   palette = mypal)+
+    guides(colour = guide_legend(nrow = 2))
+  gg$plot <- gg$plot+
+    annotate(geom = "text", x = 0, y = 0, label = caption, hjust = 0, vjust = 0, size = 4)+
+    theme(legend.justification=c(0.4, 0.1), legend.position = c(0.75,0.75)) 
+  gg$table <- gg$table + 
+    theme(plot.title = element_text(hjust = 0, size = 12))
+  gg
+  
+  pdf(glue::glue("{outdir}/survival_lp_by_donor_{i}.pdf"),height = 4, width = 4.5)
+  print(gg, newpage = FALSE)
+  dev.off()
+  
+  
+}
+
+
+# strat by donor AND tam status
+dtdf <- df %>% dplyr::mutate(donor_tam = glue::glue("{donor}_{experiment_group}"))
+surv <- Surv(time = dtdf$total_surival, event = rep(1, length(dtdf$total_surival)))
+fit <- survfit(surv ~ donor_tam, data = dtdf)
+
+# Prepare KM plot
+caption <- glue("Log-rank\np = {surv_pvalue(fit, dtdf)$pval %>% signif(3)}")
+gg <- ggsurvplot(fit, data = dtdf, conf.int = F, xlab = "Time (Days)", pval = FALSE,
+                 xlim=c(0,200), risk.table = T, #max(df$total_surival)+5
+                 legend.title = " ", 
+                 # legend = "right",
+                 tables.theme = theme_cleantable(), 
+                 break.time.by = 50,
+                 risk.table.fontsize = 4,
+                 risk.table.height = 0.20, 
+                 surv.median.line = c("h"),
+                 censor.shape = c("|"), censor.size = 6, 
+                 axes.offset = T, tables.y.text = FALSE)+
+  guides(colour = guide_legend(nrow = 2))
+gg$plot <- gg$plot+
+  annotate(geom = "text", x = 0, y = 0, label = caption, hjust = 0, vjust = 0, size = 4)+
+  theme(legend.justification=c(0.4, 0.1), legend.position = c(0.7,0.75)) 
+gg$table <- gg$table + 
+  theme(plot.title = element_text(hjust = 0, size = 12))
+gg
+
+# Export plot
+pdf(glue::glue("{outdir}/survival_lp_by_donor_tam.pdf"),height = 4, width = 4)
+print(gg, newpage = FALSE)
+dev.off()
+
+
+# bonus -------------------------------------------------------------------
+
+# survival by: quad vs quint gt
+xldf <- readxl::read_excel(glue::glue("{proj_dir}Sample_Information/Lazy Piggy Project Mouse Inventory V3.xlsx"), skip = 22) %>% 
+  janitor::clean_names() %>% 
+  dplyr::select(-control_exp, -x2) %>% 
+  dplyr::filter(sac_n_y == "Y") %>% 
+  dplyr::mutate(gt = tolower(genotype)) %>%
+  dplyr::mutate(gt_simple = dplyr::case_when(
+    nestin_cre == 1 & n_luc_sb100 == 1 & ptc == 1 & r26_pber == 1 & (lp_137_chr10 == 1 | lp_129_chr7 == 1) ~ "quint",
+    nestin_cre == 1 & n_luc_sb100 == 1 & ptc == 1 & r26_pber == 1 ~ "quad",
+    TRUE ~ "other"
+  ))
+
+# now clean up genotypes, etc etc lubridate to calc OS
+
+
+
+
+
+
+
+
+

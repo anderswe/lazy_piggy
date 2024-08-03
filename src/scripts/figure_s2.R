@@ -19,6 +19,7 @@ library(tidytable)
 library(gggenes)
 library(Rsubread)
 library(biomaRt)
+library(gprofiler2)
 source("src/scripts/utils.R")
 source("src/scripts/configs.R")
 
@@ -49,7 +50,7 @@ buffer <- 1000
 insertion_path <- glue("{awe_local_dir}20211201/all_annotations_20211201.annot.gz") # for reviewers: this is the same as for_reviewers/processed_data/wgs_lp_tumours/all_annotations_20211201.csv.gz
 
 # import insertion locations
-pb <- read_tsv(insertion_path, col_names = T)
+pb <- read_csv(insertion_path, col_names = T)
 
 # loop
 for(i in genes){

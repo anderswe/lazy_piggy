@@ -64,6 +64,10 @@ genes_keep <- na_counts %>% filter(pos_non_zero >= 2 & neg_non_zero >= 2) %>% pu
 LP_count_matrix <- LP_count_matrix[genes_keep, ]
 
 
+# quick save
+LP_count_matrix %>% saveRDS(glue::glue("{outdir}/lp_counts_clean.rds"))
+
+
 
 # Run DESeq2 --------------------------------------------------------------
 
@@ -75,8 +79,68 @@ res_filt <- res %>% as.data.frame() %>% filter(!is.na(pvalue))
 
 # save for plotting
 saveRDS(res_filt, glue("{repo_dir}/outs/rna_deseq_res_filt.rds"))
+res_filt <- readRDS(glue("{repo_dir}/outs/rna_deseq_res_filt.rds"))
+
+# TPM violinplots ---------------------------------------------------------
+
+# import DESeq2-normalized counts
+mtx <- readRDS(glue::glue("{awe_local_dir}/RNAseq/normalized_counts.rds"))
+
+# dict
+dict <- rownames(mtx) %>% 
+  gprofiler2::gconvert(organism = "mmusculus", target = "MGI") %>% 
+  dplyr::select(input, target)
+
+# gtf
+ref <- readr::read_tsv("https://data.broadinstitute.org/Trinity/CTAT/cnv/mouse_gencode.GRCm38.p6.vM25.basic.annotation.by_gene_name.infercnv_positions",
+                       col_names = c("symbol", "chr", "start", "end")) %>% 
+  dplyr::mutate(length = abs(end - start),
+                kb_length = length / 1000,
+                ensmus = ifelse(symbol %in% dict$target,
+                                plyr::mapvalues(symbol, dict$target, dict$input, warn_missing = FALSE),
+                                NA))
+
+# Intersect and order
+intsx <- intersect(rownames(mtx), ref$ensmus)
+idx <- match(intsx, ref$ensmus)
+ref_filt <- ref[idx,]
+counts_filt <- mtx %>% 
+  as.data.frame() %>% 
+  dplyr::filter(rownames(.) %in% intsx) %>% 
+  dplyr::arrange(factor(rownames(.), levels = ref_filt$ensmus))
 
 
+# convert to TPM for visualization:
+# 1. Divide the read counts by the length of each exon in kilobases. This gives you reads per kilobase (RPK).
+# 2. Count up all the RPK values in a sample and divide this number by 1,000,000. This is your “per million” scaling factor.
+# 3. Divide the RPK values by the “per million” scaling factor. This gives you TPM.
+rpk <- (counts_filt / ref_filt$kb_length) %>% as.matrix()
+per_million <- colSums(rpk) / 1000000
+tpm <- rpk %*% diag(per_million^-1)
+colnames(tpm) <- colnames(counts_filt)
+
+ggvln <- tpm %>% 
+  as.data.frame() %>% 
+  tibble::rownames_to_column("ensmus") %>% 
+  dplyr::mutate(gene = plyr::mapvalues(ensmus, dict$input, dict$target, warn_missing = FALSE)) %>% 
+  dplyr::select(-ensmus) %>% 
+  tidyr::pivot_longer(-gene, names_to = "sample", values_to = "tpm") %>% 
+  dplyr::mutate(tam_status = plyr::mapvalues(sample, LP_metadata$Mouse, LP_metadata$TamStatus, warn_missing = FALSE) %>% 
+                  factor(levels = c("TAM-", "TAM+")))
+
+# violin plot
+gene <- "Kcnb2"
+pdf(glue::glue("{outdir}/{gene}_tpm_violinplot_lp.pdf"), w = 4, h  = 4)
+ggplot(ggvln %>% dplyr::filter(gene == !!gene), aes(tam_status, tpm, colour = tam_status))+
+  geom_violin(width=0.6)+
+  geom_boxplot(width=0.1, color="grey", alpha=0.2, outlier.shape = NA)+
+  geom_jitter(width=0.1, alpha = 0.8)+
+  ggpubr::stat_compare_means()+
+  theme_classic()+
+  ylab(glue::glue("{gene} expression (TPM)"))+
+  theme(legend.position = "none",axis.title.x = element_blank())+
+  scale_color_manual(labels = c("TAM-", "TAM+"), values = as.character(pal[c("blue", "red")]))
+dev.off()
 
 
 # PCA prep ------------------------------------------------
@@ -89,7 +153,7 @@ output_dir <- glue("{repo_dir}/outs")
 
 # save
 saveRDS(vsd, glue("{repo_dir}/outs/vsd_rna_seq.rds"))
-
+vsd <- readRDS(glue("{repo_dir}/outs/vsd_rna_seq.rds"))
 # PCA plotting in figure_s2.R
 
 # UMAP calculation ------------------------------------------------
@@ -116,7 +180,7 @@ umap_by_tam <- ggplot(umap_df, aes(UMAP1, UMAP2))+
         legend.margin=margin(0,10,0,0),
         legend.box.margin=margin(-10,-10,-10,-10),
         legend.position = c(0.9,0.9))+
-  scale_fill_manual(values = c(mypal[1], mypal[3]),
+  scale_fill_manual(values = c(pal[["red"]], pal[["blue"]]),
                     breaks=c("TAMPLUS", "TAMMINUS"),
                     labels = c("TAM+", "TAM-"))
 
@@ -153,6 +217,18 @@ plot_grid(umap_by_tam, umap_by_tam_days, umap_by_sex, ncol = 1)
 dev.off()
 
 
+
+# reformat tam days as a swimmer's plot ---
+pdf(glue::glue("{outdir}/swimmers_tam_days.pdf"), w = 4, h = 3)
+umap_df %>% 
+  dplyr::filter(TamStatus == "TAMPLUS") %>% 
+  ggplot(aes(forcats::fct_reorder(Mouse, DaysOnTamoxifin), DaysOnTamoxifin))+
+  geom_col(fill = pal["red"])+
+  coord_flip()+
+  theme_classic()+
+  theme(axis.text.y = element_text(colour = "black", size = 6))+
+  labs(x = "Mouse", y = "Days on tamoxifen")
+dev.off()
 
 
 

@@ -181,14 +181,15 @@ op <- ComplexHeatmap::oncoPrint(mtx_list,
                   tamp = alter_graphic("rect", fill = col["tamp"]),
                   tamn = alter_graphic("rect", fill = col["tamn"])),
                 col = col,
-                show_pct = FALSE,
+                show_pct = TRUE,
+                pct_side = "right",
                 row_names_side = "left",
                 right_annotation = NULL,
                 row_names_gp = gpar(fontsize = 10, col = dplyr::case_when(
                   rownames(mtx_list[[1]]) %in% c("Kcnb1", "Kcnh2") ~ pal[3], #Kv hits
                   rownames(mtx_list[[1]]) %in% c("Sox2", "Smarca4", "Dync1h1") ~ pal[5], #known SHH alterations / stem cell compartment marker cf. Morrissy, Vanner
                   TRUE ~ "black")),
-                pct_gp = gpar(fontsize = 8),
+                pct_gp = gpar(fontsize = 10),
                 show_heatmap_legend = FALSE)
                 
 pdf(glue("{repo_dir}outs/gcis_oncoprint.pdf"), h = 10, w = 7)
@@ -314,6 +315,132 @@ for(subgroup in c("Group4", "SHH", "Group3", "WNT")){
 
 # Panel G -----------------------------------------------------------------
 # done in bioRender
+
+
+
+# Bonus: kcnb1 / kcnh2 RNAseq boxplots by insertion status -------------------------------------------------------------------
+
+# outdir
+outdir <- glue::glue("{repo_dir}/outs")
+rna_dir <- glue("{proj_dir}/Lazy_Piggy_Analysis/RNAseq/Expression")
+
+# insertions
+input_file <- glue::glue("{awe_local_dir}20211201/all_annotations_20211201.annot.gz")
+insertions <- data.table::fread(input_file) %>% 
+  tidyr::separate(sample, c("patient", "tissue", "library"), sep = "_")
+
+# rna count matrix
+LP_count_matrix <- readRDS(glue::glue("{outdir}/lp_counts_clean.rds")) %>% as.matrix() %>% DGEobj.utils::convertCounts(unit = "CPM", log = TRUE)
+LP_metadata <- read.table(file = glue("{rna_dir}/LP_sample_metadata.txt"), header = TRUE, stringsAsFactors = FALSE, check.names = FALSE, sep = "\t")
+
+
+# loop
+genes <- c("Kcnb1", "Kcnh2")
+mypal <- c(as.character(pal['red']), as.character(pal['blue']))
+for(gene in genes){
+  
+  # insertion samples
+  insertion_samples <- insertions %>% dplyr::filter(gene == !!gene) %>% dplyr::pull(patient) %>% unique()
+  
+  # count number of samples with insertions at gene ... with >1 supporting read
+  insertions %>% dplyr::filter(gene == !!gene & count > 1) %>% dplyr::pull(patient) %>% unique() %>% length() %>% print()
+  
+  # and of those...how many have support from a PBL/PBR library? ... and are not from a CTRL?
+  insertions %>% dplyr::filter(gene == !!gene & count > 1 & grepl("PB", library) & tissue == "PT") %>% dplyr::pull(patient) %>% unique() %>% length() %>% print()
+  
+  # and how many non control sample are there with PBL/PBR libraries?
+  insertions %>% dplyr::filter(tissue == "PT" & grepl("PB", library)) %>% dplyr::pull(patient) %>% unique() %>% length()
+  
+  # gene key
+  gene_key <- gene %>% gprofiler2::gconvert(organism = "mmusculus", target = "ENSG") %>% dplyr::pull(target)
+  
+  # subset matrix
+  df <- LP_count_matrix[gene_key,] %>% 
+    tibble::enframe() %>% 
+    dplyr::rename(sample = name, counts = value) %>% 
+    dplyr::left_join(LP_metadata %>% dplyr::select(sample = Mouse, tam = TamStatus), by = "sample") %>% 
+    dplyr::mutate(insertion_status = ifelse(sample %in% insertion_samples, "Insertion", "NoInsertion"),
+                  insertion_tam = glue::glue("{insertion_status}_{tam}"))
+  
+  pdf(glue::glue("{outdir}/boxplot_expression_{gene}_no_pvalues.pdf"), w = 4, h = 3.5)
+  print(ggplot(df, aes(insertion_status, counts, color = insertion_status))+
+          geom_violin(width=0.6)+
+          geom_boxplot(width=0.1, color="grey", alpha=0.5, outlier.shape = NA)+
+          geom_jitter(width=0.1, alpha = 0.5)+
+          # stat_compare_means()+
+          theme_classic()+
+          ylab('Expression (log CPM)')+
+          theme(legend.position = "none", axis.title.x = element_blank())+
+          scale_color_manual(values = mypal))
+  dev.off()
+  
+}
+
+
+
+
+# bonus: volcano gcis shh vs normal cb ------------------------------------
+
+# import
+dds <- readRDS("src/objs/dds_all_subgroup.RDS") #MAGIC cohort DESeq2 results from Hendrikse et al. 2022 Nature
+
+# gcis genes
+false_pos <- c("Sfi1", "En2", "Foxf2", "Pisd-ps3", "Pisd-ps1")
+sig_genes <- readRDS(glue("{awe_local_dir}20220524/sig_genes_tam_gcis_separate_no_recurrence_filter.rds")) %>% 
+  dplyr::filter(gene %notin% false_pos) %>% 
+  dplyr::pull(gene) %>% 
+  gprofiler2::gorth(source_organism = "mmusculus", target_organism = "hsapiens") %>% 
+  dplyr::pull(ortholog_name)
+
+
+# loop by subgroup
+for(subgroup in c("Group4", "SHH", "Group3", "WNT")){
+  
+  
+  # lfcShrink
+  resLFC <- lfcShrink(dds, coef=glue("RNA_seq_subgroup_allMB_k4_{subgroup}_vs_normal"), type="apeglm")
+  
+  # plot setup
+  p_adj_cutoff <- 1e-3
+  mypal <- c(as.character(pal['red']), "grey", as.character(pal['blue']))
+  dds_g <- resLFC %>% as.data.frame() %>% 
+    mutate(symbol = str_split_fixed(rownames(.), "___", 2) %>% as.data.frame() %>% pull(V1)) %>% 
+    filter(symbol %in% sig_genes) %>% 
+    mutate(label = ifelse(symbol %in% (slice_min(., order_by = padj, n = 25) %>% pull(symbol) %>% c(., "SMARCA4", "KCNH2", "DYNC1H1", "KCNB1")) ,symbol,""),
+           colour = ifelse(padj > p_adj_cutoff | abs(log2FoldChange) < 1, "not_sig",
+                           ifelse(log2FoldChange > 0, "up", "down")))
+  
+  # Set plot boundaries
+  xbound <- max(abs(dds_g$log2FoldChange)) + 0.25
+  
+  # ggplot
+  outdir <- glue("{repo_dir}/outs")
+  pdf(glue("{outdir}/volcano_deseq2_{subgroup}_vs_normal_brain_gcis_genes.pdf"), 
+      height = 5, width = 5)
+  print(ggplot(dds_g, aes(log2FoldChange, -log10(padj), label = label, colour = colour))+
+          geom_point()+
+          geom_text_repel(size = 2.75, segment.size = 0.2, box.padding = 0.35, color = ifelse(dds_g$symbol == "KCNB2", "red" ,"black"), segment.color = "black")+
+          scale_color_manual(values = alpha(c(mypal), 0.9),
+                             breaks = c("up", "not_sig", "down"),
+                             labels = c(glue("{subgroup} MB"), "Not Sig", "Ctrl brain"))+
+          theme(panel.background = element_blank(),
+                panel.border = element_rect(colour = "black", fill=NA, size=1),
+                plot.title = element_text(size=12, hjust = 0.5),
+                legend.position = "none")+
+          xlab(expression('log'[2]*'(FoldChange)'))+
+          ylab(expression('-log'[10]*'(P-adjusted)'))+
+          labs(title = glue("{str_replace(subgroup,'Group', 'Group ')} MB vs Normal Cerebellum"))  +
+          xlim(-xbound, xbound)+
+          guides(colour = guide_legend(override.aes = list(size=3)))
+  )
+  dev.off()
+  
+  # save DE results
+  write_xlsx(dds_g, glue("{outdir}/de_results_gcis_genes_{subgroup}.xlsx"))
+}
+
+
+
 
 
 # session info ------------------------------------------------------------
