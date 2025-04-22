@@ -1,6 +1,6 @@
 # Lazy Piggy: a double-jumping transposon to identify medulloblastoma maintenance genes.
 
-This repo is for sharing code and processed input data used in preparation of the Lazy Piggy / KCNB2 manuscript, originally on bioRxiv here: https://www.biorxiv.org/content/10.1101/2022.07.23.501234v1
+This repo is for sharing code and processed input data used in preparation of the Lazy Piggy / KCNB2 manuscript, published here: [10.1016/j.devcel.2025.01.001](https://www.cell.com/developmental-cell/abstract/S1534-5807(25)00001-2?rss=yes).
 
 ## Show me the code
 • All code is stored in [src/scripts](./src/scripts).
